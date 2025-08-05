@@ -31,6 +31,23 @@ Sub ComparerProgrammes()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
     
+    ' ____________  Sélection du dossier de sauvegarde du fichier final csv ET du rapport d'anomalie ______________
+
+    MsgBox "Sélectionner l'emplacement du nouveau fichier"
+    fichierSortie = "UEX_Cli_CDC" & ".xlsx"
+ 
+    'Choix du répertoire d'enregistrement du fichier traité
+    cheminSortie = Application.GetSaveAsFilename( _
+        InitialFileName:=fichierSortie, _
+        FileFilter:="Fichiers Excel (*.xlsx), *.xlsx", _
+        Title:="Sauvegarder le fichier")
+        
+        ' Vérifier si l'utilisateur a annulé l'enregistrement
+        If cheminSortie = False Then
+            MsgBox "Enregistrement annulé par l'utilisateur !", vbInformation
+            Exit Sub
+        End If
+    
     ' ---------------- Ouverture du fichier client -----------------------------------
     Set wbClient = Workbooks.Open(fichierClient)
     Set wsClient = wbClient.Worksheets("PATISTA")
@@ -210,7 +227,7 @@ Sub ComparerProgrammes()
     
     programmesDifferents = totalProgrammes - programmesIdentiques
     
-    ' Ajouter le résumé en bas
+    ' Résumé en bas du fichier
     With wsSortie
         .Cells(ligneResultat + 2, 1).Value = "RÉSUMÉ :"
         .Cells(ligneResultat + 2, 1).Font.Bold = True
@@ -232,16 +249,19 @@ Sub ComparerProgrammes()
     
  
  
-     ' -------------------------------- Création du rapport ANO HORIZONTAL ---------------------
+     ' -------------------------------- Création du rapport ANO ---------------------
     Dim wsRapportAffaire As Worksheet
     Set wsRapportAffaire = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
     wsRapportAffaire.Name = "RAPPORT ANO"
 
-    ' Dictionnaire : code affaire -> liste des PTC (programmes avec delta ? 0)
+    ' Dictionnaire : code affaire -> Collection de programmes avec type de delta (positif/négatif)
     Dim dictAnomalies As Object
     Set dictAnomalies = CreateObject("Scripting.Dictionary")
 
-    ' Organiser les anomalies par code affaire
+    ' Structure : stocker chaque programme + type d’anomalie
+    Dim dictTypesDelta As Object
+    Set dictTypesDelta = CreateObject("Scripting.Dictionary")
+
     For Each programme In programmes
         ptcClient = 0
         ptcISTA = 0
@@ -264,111 +284,62 @@ Sub ComparerProgrammes()
                 dictAnomalies.Add codeAffaire, New Collection
             End If
             dictAnomalies(codeAffaire).Add programme
+
+            ' Sauvegarder le type d'anomalie
+            If deltaPositif > 0 Then
+                dictTypesDelta.Add programme, "positif"
+            Else
+                dictTypesDelta.Add programme, "negatif"
+            End If
         End If
     Next programme
 
-    ' Affichage horizontal : chaque code affaire dans une colonne
-    Dim colIndex As Long: colIndex = 1
+    ' Chaque code affaire en colonne
+    Dim colIndex As Long: colIndex = 2
     Dim maxLignes As Long: maxLignes = 0
     Dim colAffaire As Variant, prog As Variant
 
     For Each colAffaire In dictAnomalies.Keys
         With wsRapportAffaire
-            ' Écrire le code affaire en ligne 1
+        
+            .Cells(1, 1).Value = "Code Affaire"
+            .Cells(2, 1).Value = "Programme"
+            
+            ' En-tête : Code affaire
             .Cells(1, colIndex).Value = colAffaire
             .Cells(1, colIndex).Font.Bold = True
             .Cells(1, colIndex).Interior.Color = RGB(200, 200, 200)
 
-            ' Écrire les programmes sous le code affaire
+            ' PTCs
             Dim rowIndex As Long: rowIndex = 2
             For Each prog In dictAnomalies(colAffaire)
                 .Cells(rowIndex, colIndex).Value = prog
+
+                ' Appliquer la couleur selon le type de delta
+                If dictTypesDelta.Exists(prog) Then
+                    If dictTypesDelta(prog) = "positif" Then
+                        .Cells(rowIndex, colIndex).Interior.Color = RGB(144, 238, 144) ' Vert clair
+                        .Cells(rowIndex, colIndex).Font.Color = RGB(0, 100, 0)
+                    ElseIf dictTypesDelta(prog) = "negatif" Then
+                        .Cells(rowIndex, colIndex).Interior.Color = RGB(255, 182, 193) ' Rouge clair
+                        .Cells(rowIndex, colIndex).Font.Color = RGB(139, 0, 0)
+                    End If
+                End If
+
                 rowIndex = rowIndex + 1
             Next prog
 
-            ' Garder en mémoire la profondeur max pour auto-fit plus tard
             If rowIndex > maxLignes Then maxLignes = rowIndex
-
             colIndex = colIndex + 1
         End With
     Next colAffaire
 
-    ' Ajuster largeur des colonnes et hauteur des lignes
+    ' Ajuster la mise en page
     With wsRapportAffaire
         .Rows("1:" & maxLignes).AutoFit
         .Columns("A:Z").AutoFit
     End With
 
-
-'
-'        ' -------------------------------- Création du rapport d'anomalies --------------------------------
-'    Dim wsAnomalies As Worksheet
-'    Set wsAnomalies = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
-'    wsAnomalies.Name = "RAPPORT ANO"
-'
-'    ' En-têtes
-'    With wsAnomalies
-'        .Cells(1, 1).Value = "Code Affaire"
-'        .Cells(1, 2).Value = "Programme"
-'        .Cells(1, 3).Value = "Delta positif"
-'        .Cells(1, 4).Value = "Delta négatif"
-'        .Range("A1:D1").Font.Bold = True
-'        .Range("A1:D1").Interior.Color = RGB(200, 200, 200)
-'        .Range("A1:D1").Borders.LineStyle = xlContinuous
-'    End With
-'
-'    Dim ligneAno As Long
-'    ligneAno = 2
-'
-'    ' Remplissage du rapport d'anomalies
-'    For Each programme In programmes
-'        ptcClient = 0
-'        ptcISTA = 0
-'        codeAffaire = ""
-'        deltaPositif = 0
-'        deltaNegatif = 0
-'
-'        If dictClient.Exists(programme) Then ptcClient = dictClient(programme)
-'        If dictISTA.Exists(programme) Then ptcISTA = dictISTA(programme)
-'        If dictAffaires.Exists(programme) Then codeAffaire = dictAffaires(programme)
-'
-'        If ptcISTA < ptcClient Then
-'            deltaPositif = ptcClient - ptcISTA
-'        ElseIf ptcISTA > ptcClient Then
-'            deltaNegatif = ptcISTA - ptcClient
-'        End If
-'
-'        If deltaPositif > 0 Or deltaNegatif > 0 Then
-'            With wsAnomalies
-'                .Cells(ligneAno, 1).Value = codeAffaire
-'                .Cells(ligneAno, 2).Value = programme
-'                .Cells(ligneAno, 3).Value = IIf(deltaPositif > 0, deltaPositif, "")
-'                .Cells(ligneAno, 4).Value = IIf(deltaNegatif > 0, deltaNegatif, "")
-'
-'                ' Colorier les deltas
-'                If deltaPositif > 0 Then
-'                    .Cells(ligneAno, 3).Interior.Color = RGB(144, 238, 144)
-'                    .Cells(ligneAno, 3).Font.Color = RGB(0, 100, 0)
-'                End If
-'                If deltaNegatif > 0 Then
-'                    .Cells(ligneAno, 4).Interior.Color = RGB(255, 182, 193)
-'                    .Cells(ligneAno, 4).Font.Color = RGB(139, 0, 0)
-'                End If
-'
-'                ' Bordures
-'                .Range(.Cells(ligneAno, 1), .Cells(ligneAno, 4)).Borders.LineStyle = xlContinuous
-'            End With
-'
-'            ligneAno = ligneAno + 1
-'        End If
-'    Next programme
-'
-'    ' Ajustement des colonnes
-'    wsAnomalies.Columns("A:D").AutoFit
-'
-'
-'
-'
     
     
     ' --------------------------------Fin du programme ----------------------------------------------------
@@ -382,7 +353,11 @@ Sub ComparerProgrammes()
            " Programmes avec différences: " & programmesDifferents & vbCrLf & vbCrLf & _
            " Feuille 'UEX CLI' créée avec succès!", vbInformation, "Comparaison terminée"
     
-    Exit Sub
+   
+
+    
+      ' Ouvrir le dossier contenant les fichier créés
+    Shell "explorer.exe /select,""" & cheminSortie & """, vbNormalFocus"
     
 GestionErreur:
     Application.ScreenUpdating = True
@@ -395,11 +370,11 @@ GestionErreur:
     If Not wbISTA Is Nothing Then wbISTA.Close SaveChanges:=False
     On Error GoTo 0
     
-    MsgBox " Erreur lors de l'exécution: " & vbCrLf & Err.Description & vbCrLf & vbCrLf & _
-           " Vérifiez que:" & vbCrLf & _
-           " Les fichiers existent et sont accessibles" & vbCrLf & _
-           " Les feuilles 'PATISTA' et 'LOT 1 après MAJ_BASE TRAVAIL' existent" & vbCrLf & _
-           "Les colonnes E et H contiennent les données de programmes", vbCritical, "Erreur"
+'    MsgBox " Erreur lors de l'exécution: " & vbCrLf & Err.Description & vbCrLf & vbCrLf & _
+'           " Vérifiez que:" & vbCrLf & _
+'           " Les fichiers existent et sont accessibles" & vbCrLf & _
+'           " Les feuilles 'PATISTA' et 'LOT 1 après MAJ_BASE TRAVAIL' existent" & vbCrLf & _
+'           "Les colonnes E et H contiennent les données de programmes", vbCritical, "Erreur"
 
 End Sub
 
