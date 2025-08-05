@@ -204,7 +204,7 @@ Sub ComparerProgrammes()
     wbISTA.Close SaveChanges:=False
     
     
-    ' --------------------------------- Créer un résumé
+    ' --------------------------------- Créer un résumé -----------------------------------------
     Dim totalProgrammes As Long, programmesIdentiques As Long, programmesDifferents As Long
     Dim totalDeltaPositif As Long, totalDeltaNegatif As Long
     totalProgrammes = dictProgrammes.Count
@@ -353,8 +353,9 @@ Sub ComparerProgrammes()
            " Programmes avec différences: " & programmesDifferents & vbCrLf & vbCrLf & _
            " Feuille 'UEX CLI' créée avec succès!", vbInformation, "Comparaison terminée"
     
-   
-
+           ' Enregistrer le fichier généré
+        wbSortie.SaveAs Filename:=cheminSortie, FileFormat:=xlOpenXMLWorkbook
+        
     
       ' Ouvrir le dossier contenant les fichier créés
     Shell "explorer.exe /select,""" & cheminSortie & """, vbNormalFocus"
