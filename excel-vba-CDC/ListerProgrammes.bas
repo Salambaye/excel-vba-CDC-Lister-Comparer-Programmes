@@ -231,6 +231,74 @@ Sub ComparerProgrammes()
     End With
     
     
+        ' -------------------------------- Création du rapport d'anomalies --------------------------------
+    Dim wsAnomalies As Worksheet
+    Set wsAnomalies = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
+    wsAnomalies.Name = "RAPPORT ANO"
+
+    ' En-têtes
+    With wsAnomalies
+        .Cells(1, 1).Value = "Code Affaire"
+        .Cells(1, 2).Value = "Programme"
+        .Cells(1, 3).Value = "Delta positif"
+        .Cells(1, 4).Value = "Delta négatif"
+        .Range("A1:D1").Font.Bold = True
+        .Range("A1:D1").Interior.Color = RGB(200, 200, 200)
+        .Range("A1:D1").Borders.LineStyle = xlContinuous
+    End With
+
+    Dim ligneAno As Long
+    ligneAno = 2
+
+    ' Remplissage du rapport d'anomalies
+    For Each programme In programmes
+        ptcClient = 0
+        ptcISTA = 0
+        codeAffaire = ""
+        deltaPositif = 0
+        deltaNegatif = 0
+
+        If dictClient.Exists(programme) Then ptcClient = dictClient(programme)
+        If dictISTA.Exists(programme) Then ptcISTA = dictISTA(programme)
+        If dictAffaires.Exists(programme) Then codeAffaire = dictAffaires(programme)
+
+        If ptcISTA < ptcClient Then
+            deltaPositif = ptcClient - ptcISTA
+        ElseIf ptcISTA > ptcClient Then
+            deltaNegatif = ptcISTA - ptcClient
+        End If
+
+        If deltaPositif > 0 Or deltaNegatif > 0 Then
+            With wsAnomalies
+                .Cells(ligneAno, 1).Value = codeAffaire
+                .Cells(ligneAno, 2).Value = programme
+                .Cells(ligneAno, 3).Value = IIf(deltaPositif > 0, deltaPositif, "")
+                .Cells(ligneAno, 4).Value = IIf(deltaNegatif > 0, deltaNegatif, "")
+
+                ' Colorier les deltas
+                If deltaPositif > 0 Then
+                    .Cells(ligneAno, 3).Interior.Color = RGB(144, 238, 144)
+                    .Cells(ligneAno, 3).Font.Color = RGB(0, 100, 0)
+                End If
+                If deltaNegatif > 0 Then
+                    .Cells(ligneAno, 4).Interior.Color = RGB(255, 182, 193)
+                    .Cells(ligneAno, 4).Font.Color = RGB(139, 0, 0)
+                End If
+
+                ' Bordures
+                .Range(.Cells(ligneAno, 1), .Cells(ligneAno, 4)).Borders.LineStyle = xlContinuous
+            End With
+
+            ligneAno = ligneAno + 1
+        End If
+    Next programme
+
+    ' Ajustement des colonnes
+    wsAnomalies.Columns("A:D").AutoFit
+
+
+
+    
     
     
     ' --------------------------------Fin du programme ----------------------------------------------------
