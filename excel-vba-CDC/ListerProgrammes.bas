@@ -230,27 +230,18 @@ Sub ComparerProgrammes()
         .Cells(ligneResultat + 7, 2).Interior.Color = RGB(255, 182, 193)
     End With
     
-    
-        ' -------------------------------- Création du rapport d'anomalies --------------------------------
-    Dim wsAnomalies As Worksheet
-    Set wsAnomalies = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
-    wsAnomalies.Name = "RAPPORT ANO"
+ 
+ 
+     ' -------------------------------- Création du rapport ANO HORIZONTAL ---------------------
+    Dim wsRapportAffaire As Worksheet
+    Set wsRapportAffaire = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
+    wsRapportAffaire.Name = "RAPPORT ANO"
 
-    ' En-têtes
-    With wsAnomalies
-        .Cells(1, 1).Value = "Code Affaire"
-        .Cells(1, 2).Value = "Programme"
-        .Cells(1, 3).Value = "Delta positif"
-        .Cells(1, 4).Value = "Delta négatif"
-        .Range("A1:D1").Font.Bold = True
-        .Range("A1:D1").Interior.Color = RGB(200, 200, 200)
-        .Range("A1:D1").Borders.LineStyle = xlContinuous
-    End With
+    ' Dictionnaire : code affaire -> liste des PTC (programmes avec delta ? 0)
+    Dim dictAnomalies As Object
+    Set dictAnomalies = CreateObject("Scripting.Dictionary")
 
-    Dim ligneAno As Long
-    ligneAno = 2
-
-    ' Remplissage du rapport d'anomalies
+    ' Organiser les anomalies par code affaire
     For Each programme In programmes
         ptcClient = 0
         ptcISTA = 0
@@ -269,36 +260,115 @@ Sub ComparerProgrammes()
         End If
 
         If deltaPositif > 0 Or deltaNegatif > 0 Then
-            With wsAnomalies
-                .Cells(ligneAno, 1).Value = codeAffaire
-                .Cells(ligneAno, 2).Value = programme
-                .Cells(ligneAno, 3).Value = IIf(deltaPositif > 0, deltaPositif, "")
-                .Cells(ligneAno, 4).Value = IIf(deltaNegatif > 0, deltaNegatif, "")
-
-                ' Colorier les deltas
-                If deltaPositif > 0 Then
-                    .Cells(ligneAno, 3).Interior.Color = RGB(144, 238, 144)
-                    .Cells(ligneAno, 3).Font.Color = RGB(0, 100, 0)
-                End If
-                If deltaNegatif > 0 Then
-                    .Cells(ligneAno, 4).Interior.Color = RGB(255, 182, 193)
-                    .Cells(ligneAno, 4).Font.Color = RGB(139, 0, 0)
-                End If
-
-                ' Bordures
-                .Range(.Cells(ligneAno, 1), .Cells(ligneAno, 4)).Borders.LineStyle = xlContinuous
-            End With
-
-            ligneAno = ligneAno + 1
+            If Not dictAnomalies.Exists(codeAffaire) Then
+                dictAnomalies.Add codeAffaire, New Collection
+            End If
+            dictAnomalies(codeAffaire).Add programme
         End If
     Next programme
 
-    ' Ajustement des colonnes
-    wsAnomalies.Columns("A:D").AutoFit
+    ' Affichage horizontal : chaque code affaire dans une colonne
+    Dim colIndex As Long: colIndex = 1
+    Dim maxLignes As Long: maxLignes = 0
+    Dim colAffaire As Variant, prog As Variant
+
+    For Each colAffaire In dictAnomalies.Keys
+        With wsRapportAffaire
+            ' Écrire le code affaire en ligne 1
+            .Cells(1, colIndex).Value = colAffaire
+            .Cells(1, colIndex).Font.Bold = True
+            .Cells(1, colIndex).Interior.Color = RGB(200, 200, 200)
+
+            ' Écrire les programmes sous le code affaire
+            Dim rowIndex As Long: rowIndex = 2
+            For Each prog In dictAnomalies(colAffaire)
+                .Cells(rowIndex, colIndex).Value = prog
+                rowIndex = rowIndex + 1
+            Next prog
+
+            ' Garder en mémoire la profondeur max pour auto-fit plus tard
+            If rowIndex > maxLignes Then maxLignes = rowIndex
+
+            colIndex = colIndex + 1
+        End With
+    Next colAffaire
+
+    ' Ajuster largeur des colonnes et hauteur des lignes
+    With wsRapportAffaire
+        .Rows("1:" & maxLignes).AutoFit
+        .Columns("A:Z").AutoFit
+    End With
 
 
-
-    
+'
+'        ' -------------------------------- Création du rapport d'anomalies --------------------------------
+'    Dim wsAnomalies As Worksheet
+'    Set wsAnomalies = wbSortie.Sheets.Add(After:=wbSortie.Sheets(wbSortie.Sheets.Count))
+'    wsAnomalies.Name = "RAPPORT ANO"
+'
+'    ' En-têtes
+'    With wsAnomalies
+'        .Cells(1, 1).Value = "Code Affaire"
+'        .Cells(1, 2).Value = "Programme"
+'        .Cells(1, 3).Value = "Delta positif"
+'        .Cells(1, 4).Value = "Delta négatif"
+'        .Range("A1:D1").Font.Bold = True
+'        .Range("A1:D1").Interior.Color = RGB(200, 200, 200)
+'        .Range("A1:D1").Borders.LineStyle = xlContinuous
+'    End With
+'
+'    Dim ligneAno As Long
+'    ligneAno = 2
+'
+'    ' Remplissage du rapport d'anomalies
+'    For Each programme In programmes
+'        ptcClient = 0
+'        ptcISTA = 0
+'        codeAffaire = ""
+'        deltaPositif = 0
+'        deltaNegatif = 0
+'
+'        If dictClient.Exists(programme) Then ptcClient = dictClient(programme)
+'        If dictISTA.Exists(programme) Then ptcISTA = dictISTA(programme)
+'        If dictAffaires.Exists(programme) Then codeAffaire = dictAffaires(programme)
+'
+'        If ptcISTA < ptcClient Then
+'            deltaPositif = ptcClient - ptcISTA
+'        ElseIf ptcISTA > ptcClient Then
+'            deltaNegatif = ptcISTA - ptcClient
+'        End If
+'
+'        If deltaPositif > 0 Or deltaNegatif > 0 Then
+'            With wsAnomalies
+'                .Cells(ligneAno, 1).Value = codeAffaire
+'                .Cells(ligneAno, 2).Value = programme
+'                .Cells(ligneAno, 3).Value = IIf(deltaPositif > 0, deltaPositif, "")
+'                .Cells(ligneAno, 4).Value = IIf(deltaNegatif > 0, deltaNegatif, "")
+'
+'                ' Colorier les deltas
+'                If deltaPositif > 0 Then
+'                    .Cells(ligneAno, 3).Interior.Color = RGB(144, 238, 144)
+'                    .Cells(ligneAno, 3).Font.Color = RGB(0, 100, 0)
+'                End If
+'                If deltaNegatif > 0 Then
+'                    .Cells(ligneAno, 4).Interior.Color = RGB(255, 182, 193)
+'                    .Cells(ligneAno, 4).Font.Color = RGB(139, 0, 0)
+'                End If
+'
+'                ' Bordures
+'                .Range(.Cells(ligneAno, 1), .Cells(ligneAno, 4)).Borders.LineStyle = xlContinuous
+'            End With
+'
+'            ligneAno = ligneAno + 1
+'        End If
+'    Next programme
+'
+'    ' Ajustement des colonnes
+'    wsAnomalies.Columns("A:D").AutoFit
+'
+'
+'
+'
     
     
     ' --------------------------------Fin du programme ----------------------------------------------------
