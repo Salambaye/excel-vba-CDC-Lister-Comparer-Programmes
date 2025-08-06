@@ -1,4 +1,6 @@
-Attribute VB_Name = "Module4"
+Attribute VB_Name = "Module6"
+'Salamata Nourou MBAYE
+
 Sub ComparerProgrammes()
 
   '---------------------- Optimisation pour accélérer la macro --------------------------
@@ -9,12 +11,17 @@ Sub ComparerProgrammes()
     
     Dim wbClient As Workbook, wbISTA As Workbook, wbSortie As Workbook
     Dim wsClient As Worksheet, wsISTA As Worksheet, wsSortie As Worksheet
+    Dim fdlg As FileDialog
+    Dim fdlgDossier As FileDialog
+    Dim dossierSauvegarde As String
     
     ' Initialiser les variables de classeur à Nothing
     Set wbClient = Nothing
     Set wbISTA = Nothing
     Set wbSortie = Nothing
-    Dim fichierClient As String, fichierISTA As String
+    
+    Dim cheminFichierClient As String, cheminFichierIsta As String
+    Dim fichierSortie As String, cheminSortie As String
     Dim derniereLigneClient As Long, derniereLigneISTA As Long
     Dim i As Long, j As Long, ligneResultat As Long
     Dim dictProgrammes As Object, dictClient As Object, dictISTA As Object
@@ -32,37 +39,102 @@ Sub ComparerProgrammes()
     
     On Error GoTo GestionErreur
     
-    ' Demander les fichiers à l'utilisateur
-    fichierClient = Application.GetOpenFilename("Fichiers Excel (*.xlsx;*.xls), *.xlsx;*.xls", , "Sélectionner le fichier CLIENT")
-    If fichierClient = "False" Then Exit Sub
+     ' ------------- Sélection du premier fichier (CLIENT) ---------------
+     MsgBox "Sélectionner le fichier client"
+    Set fdlg = Application.FileDialog(msoFileDialogFilePicker)
+    fdlg.Title = "Étape 1/2 : Choisir le fichier client obligatoirement"
+    fdlg.Filters.Clear
+    fdlg.Filters.Add "Fichiers Excel", "*.xlsx;*.xls;*.xlsm"
+    fdlg.AllowMultiSelect = False
     
-    fichierISTA = Application.GetOpenFilename("Fichiers Excel (*.xlsx;*.xls), *.xlsx;*.xls", , "Sélectionner le fichier ISTA")
-    If fichierISTA = "False" Then Exit Sub
+    If fdlg.Show <> -1 Then
+        MsgBox "Sélection annulée par l'utilisateur.", vbInformation
+        GoTo NettoyageEtSortie
+    End If
     
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
+    cheminFichierClient = fdlg.SelectedItems(1)
     
-    ' ____________  Sélection du dossier de sauvegarde du fichier final csv ET du rapport d'anomalie ______________
-
-    MsgBox "Sélectionner l'emplacement du nouveau fichier"
-    fichierSortie = "UEX_Cli_CDC" & ".xlsx"
- 
-    'Choix du répertoire d'enregistrement du fichier traité
-    cheminSortie = Application.GetSaveAsFilename( _
-        InitialFileName:=fichierSortie, _
-        FileFilter:="Fichiers Excel (*.xlsx), *.xlsx", _
-        Title:="Sauvegarder le fichier")
-        
-        ' Vérifier si l'utilisateur a annulé l'enregistrement
-        If cheminSortie = False Then
-            MsgBox "Enregistrement annulé par l'utilisateur !", vbInformation
-            Exit Sub
+    ' ------------------ Sélection du deuxième fichier (ISTA) ------------
+    MsgBox "Sélectionner le fichier ISTA "
+    Set fdlg = Application.FileDialog(msoFileDialogFilePicker)
+    fdlg.Title = "Étape 2/2 : Choisir le fichier d'extraction ISTA obligatoirement"
+    fdlg.Filters.Clear
+    fdlg.Filters.Add "Fichiers Excel", "*.xlsx;*.xls;*.xlsm"
+    fdlg.AllowMultiSelect = False
+    
+    If fdlg.Show <> -1 Then
+        MsgBox "Sélection annulée par l'utilisateur.", vbInformation
+        GoTo NettoyageEtSortie
+    End If
+    
+    cheminFichierIsta = fdlg.SelectedItems(1)
+     
+    ' --------------- Vérification des fichiers -------------
+    If Dir(cheminFichierClient) = "" Then
+        MsgBox "Le fichier Client n'existe pas : " & cheminFichierClient, vbCritical
+        GoTo NettoyageEtSortie
+    End If
+    
+    If Dir(cheminFichierIsta) = "" Then
+        MsgBox "Le fichier ISTA n'existe pas : " & cheminFichierIsta, vbCritical
+        GoTo NettoyageEtSortie
+    End If
+    
+    ' Vérifier que les fichiers sélectionnés soient différents
+    If cheminFichierClient = cheminFichierIsta Then
+        If MsgBox("Attention ! Vous avez sélectionné le même fichier deux fois." & vbCrLf & _
+                 "Voulez-vous continuer quand même ?", vbExclamation + vbYesNo) = vbNo Then
+            GoTo NettoyageEtSortie
         End If
+    End If
     
-    ' ---------------- Ouverture du fichier client -----------------------------------
-    Set wbClient = Workbooks.Open(fichierClient)
+    ' Ouvrir les fichiers sources
+    On Error Resume Next
+    Set wbClient = Workbooks.Open(cheminFichierClient, ReadOnly:=True)
+    If Err.Number <> 0 Then
+        MsgBox "Erreur lors de l'ouverture du fichier client : " & Err.Description, vbCritical
+        GoTo NettoyageEtSortie
+    End If
+    wbClient.Windows(1).Visible = False
+    
+    Set wbISTA = Workbooks.Open(cheminFichierIsta, ReadOnly:=True)
+    If Err.Number <> 0 Then
+        MsgBox "Erreur lors de l'ouverture du fichier ISTA : " & Err.Description, vbCritical
+        GoTo NettoyageEtSortie
+    End If
+    wbISTA.Windows(1).Visible = False
+    On Error GoTo GestionErreur
+    
+    ' Sélection du dossier de sauvegarde du fichier final
+    MsgBox "Choisir le dossier dans lequel le fichier de résultat doit être enregistré"
+    Set fdlgDossier = Application.FileDialog(msoFileDialogFolderPicker)
+    With fdlgDossier
+        .Title = "Choisir le dossier où enregistrer le fichier de résultat"
+        .AllowMultiSelect = False
+        .InitialFileName = Environ("USERPROFILE") & "\Desktop\"
+    End With
+    
+    If fdlgDossier.Show <> -1 Then
+        MsgBox "Sélection du dossier annulée par l'utilisateur.", vbInformation
+        GoTo NettoyageEtSortie
+    End If
+    
+    dossierSauvegarde = fdlgDossier.SelectedItems(1)
+    
+    ' Vérifier que le dossier existe et est accessible
+    If Dir(dossierSauvegarde, vbDirectory) = "" Then
+        MsgBox "Le dossier sélectionné n'est pas accessible : " & dossierSauvegarde, vbCritical
+        GoTo NettoyageEtSortie
+    End If
+
+    fichierSortie = "UEX_Cli_CDC_" & Format(Now, "yyyymmdd_hhmmss") & ".xlsx"  '
+    cheminSortie = dossierSauvegarde & "\" & fichierSortie
+
+    ' Références aux feuilles
     Set wsClient = wbClient.Worksheets("PATISTA")
+    Set wsISTA = wbISTA.Worksheets("LOT 1 après MAJ_BASE TRAVAIL")
     
+    ' --------------------- Ouverture du fichier client ----------------------------------
     ' Trouver la dernière ligne avec des données dans la colonne E
     derniereLigneClient = wsClient.Cells(wsClient.Rows.Count, "E").End(xlUp).Row
     
@@ -89,20 +161,11 @@ Sub ComparerProgrammes()
     Next i
     
     ' ---------------- Ouverture du fichier ISTA --------------------------------------------------------
-    Set wbISTA = Workbooks.Open(fichierISTA)
-    On Error Resume Next
-    Set wsISTA = wbISTA.Worksheets("LOT 1 après MAJ_BASE TRAVAIL")
-    On Error GoTo GestionErreur
-    
-    If wsISTA Is Nothing Then
-        MsgBox "La feuille 'LOT 1 après MAJ_BASE TRAVAIL' est introuvable.", vbCritical
-        GoTo NettoyageEtSortie
-    End If
     
     ' Trouver la dernière ligne avec des données dans la colonne H
     derniereLigneISTA = wsISTA.Cells(wsISTA.Rows.Count, "H").End(xlUp).Row
     
-    ' Compter les programmes du fichier ISTA (colonne H) - VERSION CORRIGÉE
+    ' Compter les programmes du fichier ISTA (colonne H)
     For i = 4 To derniereLigneISTA ' Commencer à la ligne 4 pour éviter l'en-tête
         ' Gestion sécurisée de la valeur de cellule H
         On Error Resume Next
@@ -156,7 +219,7 @@ Sub ComparerProgrammes()
         .Cells(1, 1).Value = "Programme"
         .Cells(1, 2).Value = "PTC ISTA"
         .Cells(1, 3).Value = "PTC CLI"
-        .Cells(1, 4).Value = "Code Affaire"    'UEX
+        .Cells(1, 4).Value = "Code Affaire"
         .Cells(1, 5).Value = "Delta positif"
         .Cells(1, 6).Value = "Delta négatif"
         
@@ -164,6 +227,10 @@ Sub ComparerProgrammes()
         .Range("A1:F1").Font.Bold = True
         .Range("A1:F1").Interior.Color = RGB(200, 200, 200)
         .Range("A1:F1").Borders.LineStyle = xlContinuous
+        
+        ' CORRECTION: Figer les volets après avoir créé les en-têtes
+        .Cells(2, 1).Select
+        ActiveWindow.FreezePanes = True
     End With
     
     ' Trier les programmes par ordre alphabétique
@@ -203,10 +270,6 @@ Sub ComparerProgrammes()
             .Cells(ligneResultat, 5).Value = IIf(deltaPositif > 0, deltaPositif, "")
             .Cells(ligneResultat, 6).Value = IIf(deltaNegatif > 0, deltaNegatif, "")
             
-             ' Figer les volets sous la ligne d'en-tête (ligne 1)
-            .Cells(2, 1).Select
-            ActiveWindow.FreezePanes = True
-            
             ' Colorier en vert si les nombres correspondent
             If ptcISTA = ptcClient And ptcISTA > 0 Then
                 .Cells(ligneResultat, 2).Interior.Color = RGB(0, 255, 0)
@@ -238,6 +301,9 @@ Sub ComparerProgrammes()
     ' Fermer les fichiers source
     wbClient.Close SaveChanges:=False
     wbISTA.Close SaveChanges:=False
+    ' CORRECTION: Réinitialiser les variables pour éviter les erreurs dans le nettoyage
+    Set wbClient = Nothing
+    Set wbISTA = Nothing
     
     ' --------------------------------- Créer un résumé -----------------------------------------
     Dim totalProgrammes As Long, programmesIdentiques As Long, programmesDifferents As Long
@@ -255,12 +321,14 @@ Sub ComparerProgrammes()
             programmesIdentiques = programmesIdentiques + 1
         ElseIf ptcISTA < ptcClient Then
             totalDeltaPositif = totalDeltaPositif + (ptcClient - ptcISTA)
+            programmesDifferents = programmesDifferents + 1
         ElseIf ptcISTA > ptcClient Then
             totalDeltaNegatif = totalDeltaNegatif + (ptcISTA - ptcClient)
+            programmesDifferents = programmesDifferents + 1
         End If
     Next programme
     
-    programmesDifferents = totalProgrammes - programmesIdentiques
+    ' CORRECTION: Supprimé la ligne qui recalculait programmesDifferents incorrectement
     
     ' Résumé en bas du fichier
     With wsSortie
@@ -285,9 +353,9 @@ Sub ComparerProgrammes()
     ' -------------------------------- Création du rapport ANO ---------------------
     
     ' Réouvrir les fichiers pour l'analyse des anomalies
-    Set wbClient = Workbooks.Open(fichierClient)
+    Set wbClient = Workbooks.Open(cheminFichierClient, ReadOnly:=True)
     Set wsClient = wbClient.Worksheets("PATISTA")
-    Set wbISTA = Workbooks.Open(fichierISTA)
+    Set wbISTA = Workbooks.Open(cheminFichierIsta, ReadOnly:=True)
     Set wsISTA = wbISTA.Worksheets("LOT 1 après MAJ_BASE TRAVAIL")
     
     Dim wsRapportAffaire As Worksheet
@@ -361,7 +429,7 @@ Sub ComparerProgrammes()
                             
                             If Not existeDeja Then
                                 dictAnomalies(codeAffaire).Add desc
-                                dictTypesDelta.Add desc & "_" & codeAffaire, "positif"  ' Clé unique
+                                dictTypesDelta.Add desc & "_" & codeAffaire, "positif"
                             End If
                         End If
                     End If
@@ -390,17 +458,19 @@ Sub ComparerProgrammes()
                             End If
                             
                             ' Vérifier si cette description existe déjà pour éviter les doublons
-                            existeDeja = False
-                            For Each itemExistant In dictAnomalies(codeAffaire)
-                                If itemExistant = desc Then
-                                    existeDeja = True
+                            Dim existeDeja2 As Boolean  ' C
+                            existeDeja2 = False
+                            Dim itemExistant2 As Variant
+                            For Each itemExistant2 In dictAnomalies(codeAffaire)
+                                If itemExistant2 = desc Then
+                                    existeDeja2 = True
                                     Exit For
                                 End If
-                            Next itemExistant
+                            Next itemExistant2
                             
-                            If Not existeDeja Then
+                            If Not existeDeja2 Then
                                 dictAnomalies(codeAffaire).Add desc
-                                dictTypesDelta.Add desc & "_" & codeAffaire, "negatif"  ' Clé unique
+                                dictTypesDelta.Add desc & "_" & codeAffaire, "negatif"
                             End If
                         End If
                     End If
@@ -449,9 +519,6 @@ Sub ComparerProgrammes()
             If rowIndex > maxLignes Then maxLignes = rowIndex
             colIndex = colIndex + 1
             
-            ' Ajouter des bordures
-            .Range(.Cells(1, 1), .Cells(1, 10000)).Borders.LineStyle = xlContinuous
-            
         End With
     Next colAffaire
     
@@ -461,30 +528,59 @@ Sub ComparerProgrammes()
         .Columns("B:Z").ColumnWidth = 25
         .Range("A1:A2").Font.Bold = True
         .Range("A1:A2").Interior.Color = RGB(220, 220, 220)
+        ' Ajout des bordures
+        If maxLignes > 0 Then
+            .Range("A1:" & Chr(65 + colIndex - 1) & maxLignes).Borders.LineStyle = xlContinuous
+        End If
     End With
     
     ' Fermer les fichiers réouverts
     wbClient.Close SaveChanges:=False
     wbISTA.Close SaveChanges:=False
+    Set wbClient = Nothing
+    Set wbISTA = Nothing
+    
+    '  Enregistrer le fichier
+    On Error Resume Next
+    wbSortie.SaveAs Filename:=cheminSortie, FileFormat:=xlOpenXMLWorkbook
+    If Err.Number <> 0 Then
+        MsgBox "Erreur lors de la sauvegarde du fichier : " & Err.Description & vbCrLf & _
+               "Chemin : " & cheminSortie, vbCritical
+        GoTo GestionErreur
+    End If
+    On Error GoTo GestionErreur
     
     ' --------------------------------Fin du programme ----------------------------------------------------
     Application.ScreenUpdating = True
     Application.DisplayAlerts = True
     Application.StatusBar = False
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
     
     MsgBox " Analyse terminée avec succès !" & vbCrLf & vbCrLf & _
            " Total programmes analysés: " & totalProgrammes & vbCrLf & _
            " Programmes identiques: " & programmesIdentiques & vbCrLf & _
            " Programmes avec différences: " & programmesDifferents & vbCrLf & vbCrLf & _
-           " Feuille 'UEX CLI' créée avec succès!", vbInformation, "Comparaison terminée"
+           " Fichier sauvegardé : " & cheminSortie, vbInformation, "Comparaison terminée"
     
-           ' Enregistrer le fichier généré
-        wbSortie.SaveAs Filename:=cheminSortie, FileFormat:=xlOpenXMLWorkbook
-        
-    ' Ouvrir le dossier contenant les fichier créés
+    ' Ouvrir le dossier contenant le fichier créé
     Shell "explorer.exe /select,""" & cheminSortie & """", vbNormalFocus
     
     Exit Sub
+
+GestionErreur:
+    ' Restaurer les paramètres même en cas d'erreur
+    Application.ScreenUpdating = True
+    Application.Calculation = xlCalculationAutomatic
+    Application.EnableEvents = True
+    Application.DisplayAlerts = True
+    
+    MsgBox " Erreur lors de l'exécution: " & vbCrLf & Err.Description & vbCrLf & vbCrLf & _
+           " Vérifiez que:" & vbCrLf & _
+           " - Les fichiers existent et sont accessibles" & vbCrLf & _
+           " - Les feuilles 'PATISTA' et 'LOT 1 après MAJ_BASE TRAVAIL' existent" & vbCrLf & _
+           " - Les colonnes E et H contiennent les données de programmes" & vbCrLf & _
+           " - Vous avez les droits d'écriture dans le dossier de destination", vbCritical, "Erreur"
 
 NettoyageEtSortie:
     ' Fermer les fichiers en cas d'erreur
@@ -502,42 +598,16 @@ NettoyageEtSortie:
     End If
     On Error GoTo 0
     
-    Application.ScreenUpdating = True
-    Application.DisplayAlerts = True
-    Application.StatusBar = False
-    Exit Sub
-
-GestionErreur:
-'    Application.ScreenUpdating = True
-'    Application.DisplayAlerts = True
-'    Application.StatusBar = False
-
-'    ' Fermer les fichiers en cas d'erreur
-'    On Error Resume Next
-'    If Not (wbClient Is Nothing) Then
-'        wbClient.Close SaveChanges:=False
-'        Set wbClient = Nothing
-'    End If
-'    If Not (wbISTA Is Nothing) Then
-'        wbISTA.Close SaveChanges:=False
-'        Set wbISTA = Nothing
-'    End If
-'    If Not (wbSortie Is Nothing) Then
-'        Set wbSortie = Nothing
-'    End If
-'    On Error GoTo 0
-'
-'    MsgBox " Erreur lors de l'exécution: " & vbCrLf & Err.Description & vbCrLf & vbCrLf & _
-'           " Vérifiez que:" & vbCrLf & _
-'           " - Les fichiers existent et sont accessibles" & vbCrLf & _
-'           " - Les feuilles 'PATISTA' et 'LOT 1 après MAJ_BASE TRAVAIL' existent" & vbCrLf & _
-'           " - Les colonnes E et H contiennent les données de programmes", vbCritical, "Erreur"    ' ----------------------------------- Restautrer les paramètres --------------------------------
+    ' Restaurer les paramètres
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
     Application.EnableEvents = True
     Application.DisplayAlerts = True
 
 End Sub
+
+
+
 
 ' Fonction pour trier un tableau
 Sub TrierTableau(ByRef arr As Variant)
@@ -554,4 +624,5 @@ Sub TrierTableau(ByRef arr As Variant)
         Next j
     Next i
 End Sub
+
 
